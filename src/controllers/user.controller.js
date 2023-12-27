@@ -226,4 +226,104 @@ const logoutUser = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, "User logged out"));
 });
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+const changeCurrentUserPassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+
+    // Find the user by ID and check if the old password is correct
+    const user = await User.findById(req.user?._id);
+    if (!(await user.isPasswordCorrect(oldPassword))) {
+        throw new ApiError(400, "Invalid old password");
+    }
+
+    // Update the user's password and save without validation
+    await user.updateOne({ password: newPassword }, { validateBeforeSave: false });
+
+    // Return a success response
+    return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "Password changed successfully"));
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+    // Return the current user in the response
+    return res.status(200).json(new ApiResponse(200, req.user, "Current user fetched successfully"));
+});
+
+const updateAccountDetails = asyncHandler(async (req, res) => {
+    // Extract fullname and email from the request body
+    const { fullname, email } = req.body;
+
+    // Check if required fields are provided
+    if (!fullname || !email) {
+        throw new ApiError(400, "All fields are required");
+    }
+
+    // Update user details and retrieve the updated user (excluding password)
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: { fullname, email } },
+        { new: true }  // Return the updated document
+    ).select("-password");  // Exclude the password field from the response
+
+    // Return a success response with the updated user details
+    return res.status(200).json(new ApiResponse(200, user, "Account details updated successfully"));
+});
+
+const updateUserAvatar = asyncHandler(async (req, res) => {
+    // Extract the local path of the avatar file from the request
+    const avatarLocalPath = req.file?.path;
+
+    // Check if the avatar file is missing
+    if (!avatarLocalPath) {
+        throw new ApiError(400, "Avatar file is missing");
+    }
+
+    // Upload the avatar to Cloudinary and get the URL
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+    // Check for errors during the avatar upload
+    if (!avatar.url) {
+        throw new ApiError(400, "Error while uploading avatar");
+    }
+
+    // Update the user's avatar URL in the database
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: { avatar: avatar.url } },
+        { new: true, select: "-password" }  // Return the updated document and exclude the password field
+    );
+
+    // Return a success response with the updated user details
+    return res.status(200).json(new ApiResponse(200, updatedUser, "Avatar Image updated successfully"));
+});
+
+const updateUserCoverImage = asyncHandler(async (req, res) => {
+    // Extract the local path of the cover image file from the request
+    const coverImageLocalPath = req.file?.path;
+
+    // Check if the cover image file is missing
+    if (!coverImageLocalPath) {
+        throw new ApiError(400, "Cover file is missing");
+    }
+
+    // Upload the cover image to Cloudinary and get the URL
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
+    // Check for errors during the cover image upload
+    if (!coverImage.url) {
+        throw new ApiError(400, "Error while uploading cover image");
+    }
+
+    // Update the user's cover image URL in the database
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: { coverImage: coverImage.url } },
+        { new: true, select: "-password" }  // Return the updated document and exclude the password field
+    );
+
+    // Return a success response with the updated user details
+    return res.status(200).json(new ApiResponse(200, updatedUser, "Cover Image updated successfully"));
+});
+
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentUserPassword, getCurrentUser, updateAccountDetails, updateUserAvatar, updateUserCoverImage };
